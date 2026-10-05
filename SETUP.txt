@@ -1,0 +1,175 @@
+API_SAMPLE_API - HERE TRAFFIC COLLECTOR - SERVER SETUP
+=======================================================
+Plain text file. Safe to copy commands straight into the terminal.
+Run the steps in order. Check the output of each step before the next.
+
+
+STEP 1 - TEST YOUR HERE API KEY (on the server, before anything else)
+---------------------------------------------------------------------
+Replace YOUR_KEY with the real key.
+
+curl -s "https://data.traffic.hereapi.com/v7/flow?in=bbox:79.83,6.84,79.92,6.98&locationReferencing=shape&apiKey=YOUR_KEY" | head -c 1500
+
+GOOD: output starts with {"sourceUpdated":... and has "results":[ ... "currentFlow" ...
+BAD : "Unauthorized" or 401/403  -> key wrong or Traffic API not enabled on the HERE project
+BAD : error about the bbox/area size -> use smaller areas in config.json (see STEP 8)
+
+Optional - test the routing API too (only if you will use routes or both):
+
+curl -s "https://router.hereapi.com/v8/routes?transportMode=car&origin=6.9344,79.8428&destination=6.8930,79.8560&return=summary&apiKey=YOUR_KEY"
+
+GOOD: output has "summary" with "duration" and "baseDuration"
+
+
+STEP 2 - CREATE THE DATA FOLDER ON THE DATA DISK
+------------------------------------------------
+Check the data disk is mounted first:
+
+df -h /mnt/disks/data
+
+Then create the folder, owned by UID 1000 (the user inside the container):
+
+sudo mkdir -p /mnt/disks/data/traffic
+sudo chown 1000:1000 /mnt/disks/data/traffic
+sudo chmod 750 /mnt/disks/data/traffic
+ls -ld /mnt/disks/data/traffic
+
+Expected: drwxr-x--- ... 1000 1000 ... /mnt/disks/data/traffic
+(The owner may show as a username instead of 1000 - that is fine.)
+
+
+STEP 3 - PUT THE PROJECT FILES ON THE SERVER
+--------------------------------------------
+Upload the api_collector.zip to your home folder, then:
+
+cd ~
+unzip api_collector.zip
+cd ~/api_collector
+ls -la
+
+Expected files:
+  api_sample_api.py  config.json  docker-compose.yml  Dockerfile
+  requirements.txt   .env.example  .dockerignore  README.md  SETUP.txt
+
+
+STEP 4 - CREATE THE .env FILE
+-----------------------------
+cd ~/api_collector
+cp .env.example .env
+nano .env
+
+Set:
+  HERE_API_KEY=your real key
+  COLLECT_MODE=flow          (or routes, or both)
+  INTERVAL_SECONDS=900       (15 min. Use 300 for 5 min data)
+
+Save: Ctrl+O, Enter, Ctrl+X
+
+Lock the file so only you can read the key:
+
+chmod 600 .env
+
+
+STEP 5 - BUILD AND START
+------------------------
+cd ~/api_collector
+docker compose up -d --build
+docker compose ps
+
+Expected: api_sample_collector   Up ... (health: starting)
+After about 3 minutes it should show (healthy).
+
+
+STEP 6 - WATCH THE FIRST CYCLES
+-------------------------------
+docker compose logs -f
+
+GOOD lines:
+  Collector started. mode=flow interval=900s data=/app/data
+  Flow area colombo: 1234 segments
+Press Ctrl+C to stop watching (the collector keeps running).
+
+Check the files:
+
+ls -lh /mnt/disks/data/traffic/
+head -5 /mnt/disks/data/traffic/flow_*.csv
+
+
+STEP 7 - DAILY / USEFUL COMMANDS (run inside ~/api_collector)
+-------------------------------------------------------------
+Live logs ............... docker compose logs -f
+Last 50 log lines ....... docker compose logs --tail=50
+Status / health ......... docker compose ps
+Stop .................... docker compose down
+Start ................... docker compose up -d
+Rebuild after code change docker compose up -d --build
+Disk usage of data ...... du -sh /mnt/disks/data/traffic
+Resource usage .......... docker stats --no-stream api_sample_collector
+
+
+STEP 8 - CHANGING AREAS OR ROUTES
+---------------------------------
+nano ~/api_collector/config.json
+
+No restart needed - config.json is reloaded every cycle.
+
+Area formats:
+  bbox:WEST,SOUTH,EAST,NORTH      e.g. bbox:79.83,6.84,79.92,6.98
+  circle:LAT,LNG;r=METRES         e.g. circle:6.9271,79.8612;r=3000
+
+Use ONE bbox, or areas that do NOT overlap. Overlapping areas save the
+same road segment twice under different area_id values.
+
+Routes use "LAT,LNG" for origin and destination.
+
+After editing, check the JSON is valid:
+
+python3 -c "import json;json.load(open('config.json'));print('OK')"
+
+
+STEP 9 - BACKUP (recommended)
+-----------------------------
+The data is only on the server disk. Copy it somewhere else regularly,
+for example to a GCS bucket (replace BUCKET_NAME):
+
+gsutil -m rsync -r /mnt/disks/data/traffic gs://BUCKET_NAME/traffic
+
+Daily cron at 2:30 AM:
+
+crontab -e
+
+Add this line:
+
+30 2 * * * gsutil -m rsync -r /mnt/disks/data/traffic gs://BUCKET_NAME/traffic >> /home/$USER/traffic_backup.log 2>&1
+
+
+TROUBLESHOOTING
+---------------
+"Permission denied" writing to /app/data
+  -> sudo chown 1000:1000 /mnt/disks/data/traffic
+     docker compose restart
+
+"HERE error 401/403 (not retrying)"
+  -> wrong key, or the API is not enabled on your HERE project. Fix .env, then:
+     docker compose up -d
+
+"Rate limited (429)"
+  -> too many requests. Increase INTERVAL_SECONDS or use fewer areas/routes.
+
+Status stays (unhealthy)
+  -> no cycle finished in the last 2 hours. Check: docker compose logs --tail=100
+
+"Flow area colombo: 0 segments"
+  -> run the STEP 1 curl again and check the response.
+
+
+QUOTA ESTIMATE (requests per month)
+-----------------------------------
+requests/day = (areas + routes) x 86400 / INTERVAL_SECONDS
+
+flow,   1 bbox,   15 min .......  ~2,900 / month
+flow,   1 bbox,    5 min .......  ~8,600 / month
+both,   1 bbox + 5 routes, 15 min  ~17,300 / month
+both,   1 bbox + 5 routes,  5 min  ~51,800 / month
+
+Compare with the free limit on your HERE plan.

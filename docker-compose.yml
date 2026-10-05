@@ -1,0 +1,23 @@
+services:
+  collector:
+    build: .
+    container_name: api_sample_collector
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /mnt/disks/data/traffic:/app/data
+      - ./config.json:/app/config.json:ro
+    stop_grace_period: 90s
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

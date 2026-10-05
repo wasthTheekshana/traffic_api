@@ -1,0 +1,7 @@
+data/
+.env
+__pycache__/
+*.pyc
+.git/
+SETUP.txt
+README.md
