@@ -1,0 +1,73 @@
+HERE 2-DAY TEST RUN - 20 COLOMBO CORRIDORS
+==========================================
+Mode: routes | every 15 min | 24 h | 1,920 requests/day | ~3,840 in 2 days
+
+
+1. ON YOUR PC - copy the new files into your traffic_api repo, then push
+-------------------------------------------------------------------------
+Files to replace/add:
+  api_sample_api.py  check_data.py  config.json  Dockerfile
+  docker-compose.yml  .env.example  .gitignore  RUN_2_DAYS.txt
+
+git status
+   (make sure .env is NOT in the list)
+git add .
+git commit -m "HERE routes mode: 20 Colombo corridors + data check"
+git push origin main
+
+
+2. ON THE SERVER
+----------------
+cd ~/traffic_api
+git pull origin main
+
+Set routes mode in .env:
+nano .env
+   COLLECT_MODE=routes
+   INTERVAL_SECONDS=900
+   (keep HERE_API_KEY as it is)
+
+docker compose config --quiet && echo "compose OK"
+docker compose down
+docker compose up -d --build
+docker compose ps
+docker compose logs -f
+
+Good log line every 15 min:
+   Routes: 20/20 OK, 0 with traffic delay > 0
+The last number is the important one.
+Ctrl+C to stop watching (collector keeps running).
+
+
+3. CHECK THE DATA (any time, best after each rush hour)
+--------------------------------------------------------
+cd ~/traffic_api
+docker compose exec collector python check_data.py
+
+The last line says either:
+   RESULT: TRAFFIC FOUND - x/20 segments change over time. HERE data is usable.
+or
+   RESULT: NO TRAFFIC - every segment has one constant duration (free-flow only).
+
+Good times to check:
+   after 9:30 AM  (morning rush 7:30-9:30)
+   after 7:30 PM  (evening rush 5:00-7:30)
+
+
+4. QUICK LOG CHECK (only rows with traffic)
+-------------------------------------------
+docker compose logs | grep "traffic delay" | grep -v ", 0 with"
+
+No output = no sample has had any traffic so far.
+
+
+5. AFTER 2 DAYS
+---------------
+Run check_data.py one last time and paste the output to Claude.
+
+To stop the collector:
+cd ~/traffic_api
+docker compose down
+
+The CSV files stay in /mnt/disks/data/traffic (view with sudo):
+sudo ls -lh /mnt/disks/data/traffic/

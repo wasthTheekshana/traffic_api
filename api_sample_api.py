@@ -50,7 +50,7 @@ FLOW_FIELDS = [
 ]
 ROUTE_FIELDS = [
     "timestamp", "route_id", "origin", "destination",
-    "length_m", "duration_s", "base_duration_s", "delay_s", "status",
+    "length_m", "duration_s", "base_duration_s", "delay_s", "speed_kmh", "status",
 ]
 
 running = True
@@ -184,7 +184,7 @@ def collect_route(route, ts):
         "timestamp": ts, "route_id": route["id"],
         "origin": route["origin"], "destination": route["destination"],
         "length_m": None, "duration_s": None, "base_duration_s": None,
-        "delay_s": None, "status": "FAILED",
+        "delay_s": None, "speed_kmh": None, "status": "FAILED",
     }
     try:
         summary = data["routes"][0]["sections"][0]["summary"]
@@ -196,6 +196,8 @@ def collect_route(route, ts):
         })
         if row["duration_s"] is not None and row["base_duration_s"] is not None:
             row["delay_s"] = row["duration_s"] - row["base_duration_s"]
+        if row["duration_s"] and row["length_m"]:
+            row["speed_kmh"] = round(row["length_m"] / row["duration_s"] * 3.6, 2)
     except (TypeError, KeyError, IndexError):
         log.warning("Route %s: no route returned", route["id"])
     return row
@@ -219,9 +221,11 @@ def run_cycle(cfg):
             if not running:
                 break
             rows.append(collect_route(route, ts))
+            time.sleep(0.3)
         save_rows("routes", ROUTE_FIELDS, rows)
         ok = sum(r["status"] == "OK" for r in rows)
-        log.info("Routes: %d/%d OK", ok, len(rows))
+        delayed = sum(1 for r in rows if r["delay_s"])
+        log.info("Routes: %d/%d OK, %d with traffic delay > 0", ok, len(rows), delayed)
 
 
 def main():
