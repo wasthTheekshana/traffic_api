@@ -10,12 +10,12 @@ services:
     stop_grace_period: 90s
     security_opt:
       - no-new-privileges:true
-    pids_limit: 100
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
+          pids: 100
     logging:
       driver: json-file
       options:
