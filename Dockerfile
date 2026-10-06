@@ -12,7 +12,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY api_sample_api.py check_data.py config.json ./
+COPY api_sample_api.py check_data.py test_google.py config.json routes_spare.json ./
 
 # run as non-root user with fixed UID 1000 (host data folder is chowned to 1000)
 RUN useradd -m -u 1000 collector && mkdir -p /app/data && chown -R collector /app

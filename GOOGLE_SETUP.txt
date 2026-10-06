@@ -1,0 +1,119 @@
+GOOGLE ROUTES API - COLOMBO TRAFFIC COLLECTOR - SETUP
+=====================================================
+10 corridors | every hour 06:00-21:00 | 160 requests/day | ~4,960/month
+Google free tier for traffic-aware routes (Compute Routes Pro): 5,000/month
+Cost: $0 as long as the caps below stay in place.
+
+
+PART A - GOOGLE CLOUD CONSOLE (one time)
+----------------------------------------
+1. Billing must be enabled on the project (Google requires it even for free use).
+
+2. Enable the API:
+   APIs & Services > Library > search "Routes API" > Enable
+
+3. Create the key:
+   APIs & Services > Credentials > Create credentials > API key
+   Edit the key:
+     API restrictions        : Restrict key > select "Routes API" only
+     Application restrictions: IP addresses > add the server's EXTERNAL IP
+   (get the IP on the server with:  curl -s ifconfig.me ; echo)
+   Save.
+
+4. Daily quota cap (second safety net, outside the code):
+   Google Maps Platform > Quotas > select Routes API
+   Set the per-day request quota to 160
+   Google then REJECTS extra requests instead of billing them.
+
+5. Budget alert (third safety net):
+   Billing > Budgets & alerts > Create budget > amount 1 USD
+   Alerts at 50% and 100% to your email.
+
+
+PART B - ON YOUR PC (Git)
+-------------------------
+Replace the files in your traffic_api repo with the new ones:
+  api_sample_api.py  test_google.py  check_data.py  config.json
+  routes_spare.json  Dockerfile  docker-compose.yml  .env.example
+  .gitignore  .dockerignore  GOOGLE_SETUP.txt
+
+git status            (.env must NOT be listed)
+git add .
+git commit -m "Switch collector to Google Routes API (free tier, 10 corridors)"
+git push origin main
+
+
+PART C - ON THE SERVER
+----------------------
+1. Stop the HERE collector and pull:
+
+cd ~/traffic_api
+docker compose down
+git pull origin main
+
+2. New .env (old HERE settings are not used any more):
+
+cp .env.example .env
+nano .env
+   GOOGLE_API_KEY=your key
+   (leave the other lines as they are)
+chmod 600 .env
+
+3. Build, then run the ONE-TIME TEST first (uses 4 requests):
+
+docker compose build
+docker compose run --rm collector python test_google.py
+
+   GOOD:  traffic_s bigger than static_s, and
+          RESULT: Google HAS live traffic for Colombo
+   NO DELAY: run the test again at 8-9 AM or 5-7 PM before deciding
+   HTTP_403: API not enabled / key restriction wrong (check PART A 2-3)
+
+4. Only if the test shows traffic, start the collector:
+
+docker compose up -d
+docker compose ps
+docker compose logs -f
+
+   Expected:
+   Collector started. routes=10 interval=3600s hours=6-21 -> ~160 requests/day (limits: 160/day, 4900/month)
+   Next run at 2026-10-06 14:00
+   Routes: 10/10 OK, 7 with traffic delay > 0 | used today 14/160, month 14/4900
+
+
+PART D - CHECKING
+-----------------
+Summary + usage + delay by hour:
+cd ~/traffic_api
+docker compose exec collector python check_data.py
+
+Files (need sudo):
+sudo ls -lh /mnt/disks/data/traffic/
+sudo tail -5 /mnt/disks/data/traffic/google_routes_$(date +%F).csv
+
+Real usage in Google (the true number):
+Google Maps Platform > Metrics > Routes API
+
+
+COST SAFETY - HOW IT IS PROTECTED
+---------------------------------
+1. Code cap: DAILY_LIMIT=160, MONTHLY_LIMIT=4900 (counted in data/usage.json,
+   survives restarts). When reached, requests stop until next day/month.
+2. Google daily quota = 160 (PART A 4).
+3. Budget alert at 1 USD (PART A 5).
+4. Errors 400/403/429 are never retried.
+5. routingPreference is TRAFFIC_AWARE (Pro). Never change it to
+   TRAFFIC_AWARE_OPTIMAL - that is Enterprise (only 1,000 free).
+
+DO NOT delete data/usage.json in the middle of a month (the counter resets).
+If you add corridors from routes_spare.json, reduce hours or corridors so
+corridors x runs/day stays at 160 or less:
+   10 corridors x 16 runs (06-21) = 160   <- current
+   16 corridors x 10 runs (07-09,12-13,16-20) - set ACTIVE_HOURS per needs
+   20 corridors x  8 runs = 160  e.g. INTERVAL_SECONDS=7200, ACTIVE_HOURS=6-21
+
+
+OLD HERE DATA
+-------------
+routes_*.csv files from HERE stay in /mnt/disks/data/traffic. They have no
+traffic in them - do not use them for training.

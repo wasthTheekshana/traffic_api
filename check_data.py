@@ -1,50 +1,56 @@
 """
-Checks whether the collected HERE route data contains real traffic.
-Run on the server:  docker compose exec collector python check_data.py
+Summary of collected Google data.
+Run:  docker compose exec collector python check_data.py
 """
-import csv
-import glob
-import os
+import csv, glob, json, os
 from collections import defaultdict
 
 DATA_DIR = os.getenv("DATA_DIR", "/app/data")
-files = sorted(glob.glob(os.path.join(DATA_DIR, "routes_*.csv")))
+files = sorted(glob.glob(os.path.join(DATA_DIR, "google_routes_*.csv")))
+try:
+    u = json.load(open(os.path.join(DATA_DIR, "usage.json")))
+    print(f"Usage       : today {u['day_count']} | month {u['month']} {u['month_count']}  (free: 5,000/month)")
+except Exception:
+    pass
 if not files:
-    print("No routes_*.csv files yet in", DATA_DIR)
+    print("No google_routes_*.csv files yet.")
     raise SystemExit
 
 rows = []
 for f in files:
     with open(f, encoding="utf-8") as fh:
-        rows.extend(r for r in csv.DictReader(fh) if r["status"] == "OK")
-
-if not rows:
-    print("Files found but no successful rows yet.")
-    raise SystemExit
-
+        rows.extend(csv.DictReader(fh))
+ok = [r for r in rows if r["status"] == "OK"]
+bad = len(rows) - len(ok)
 times = sorted({r["timestamp"] for r in rows})
 print(f"Files       : {len(files)}  ({os.path.basename(files[0])} .. {os.path.basename(files[-1])})")
 print(f"Samples     : {len(times)}  ({times[0]}  ->  {times[-1]})")
-print(f"OK rows     : {len(rows)}")
+print(f"Rows        : {len(ok)} OK, {bad} failed")
+if not ok:
+    raise SystemExit
+delayed = [r for r in ok if float(r["delay_s"] or 0) > 0]
+print(f"Delay > 0   : {len(delayed)} rows ({100 * len(delayed) / len(ok):.1f}%)\n")
 
-delayed = [r for r in rows if float(r["delay_s"] or 0) != 0]
-print(f"Delay > 0   : {len(delayed)} rows ({100 * len(delayed) / len(rows):.1f}%)")
+seg = defaultdict(list)
+for r in ok:
+    seg[r["route_id"]].append(r)
+print(f"{'Segment':26} {'n':>4} {'uniq':>4} {'min_s':>6} {'max_s':>6} {'avg_delay':>9} {'max_delay':>9}")
+for s, rs in sorted(seg.items()):
+    d = [int(r["duration_s"]) for r in rs]
+    dl = [float(r["delay_s"] or 0) for r in rs]
+    print(f"{s:26} {len(rs):>4} {len(set(d)):>4} {min(d):>6} {max(d):>6} {sum(dl)/len(dl):>9.0f} {max(dl):>9.0f}")
+
+hours = defaultdict(list)
+for r in ok:
+    hours[r["timestamp"][11:13]].append(float(r["delay_s"] or 0))
+print("\nAverage delay by hour (all corridors):")
+for h in sorted(hours):
+    v = sum(hours[h]) / len(hours[h])
+    print(f"  {h}:00  {v:6.0f} s  {'#' * int(v // 10)}")
+
+changing = sum(1 for rs in seg.values() if len({r['duration_s'] for r in rs}) > 1)
 print()
-
-by_seg = defaultdict(list)
-for r in rows:
-    by_seg[r["route_id"]].append(int(float(r["duration_s"])))
-
-print(f"{'Segment':26} {'samples':>7} {'unique':>6} {'min_s':>6} {'max_s':>6} {'max_delay':>9}")
-for seg, durs in sorted(by_seg.items()):
-    seg_rows = [r for r in rows if r["route_id"] == seg]
-    max_delay = max(float(r["delay_s"] or 0) for r in seg_rows)
-    print(f"{seg:26} {len(durs):>7} {len(set(durs)):>6} {min(durs):>6} {max(durs):>6} {max_delay:>9.0f}")
-
-print()
-changing = sum(1 for d in by_seg.values() if len(set(d)) > 1)
 if delayed or changing:
-    print(f"RESULT: TRAFFIC FOUND - {changing}/{len(by_seg)} segments change over time. HERE data is usable.")
+    print(f"RESULT: TRAFFIC FOUND - {changing}/{len(seg)} segments change over time.")
 else:
-    print("RESULT: NO TRAFFIC - every segment has one constant duration (free-flow only).")
-    print("        HERE has no traffic data for these roads. Do not use this for training.")
+    print("RESULT: NO TRAFFIC so far.")
