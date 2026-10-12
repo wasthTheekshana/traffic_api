@@ -210,7 +210,7 @@ def run_cycle():
                         usage["day_count"], DAILY_LIMIT, usage["month_count"], MONTHLY_LIMIT)
             rows.pop()
             break
-        time.sleep(0.2)
+        time.sleep(1.0)
     save_rows(rows)
     ok = sum(r["status"] == "OK" for r in rows)
     delayed = sum(1 for r in rows if r["delay_s"])
