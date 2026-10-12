@@ -29,7 +29,7 @@ import requests
 API_KEY = os.getenv("GOOGLE_API_KEY", "")
 INTERVAL_SECONDS = int(os.getenv("INTERVAL_SECONDS", "3600"))
 ACTIVE_HOURS = os.getenv("ACTIVE_HOURS", "6-21")          # inclusive local hours
-DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "160"))
+DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "250"))
 MONTHLY_LIMIT = int(os.getenv("MONTHLY_LIMIT", "4900"))
 CONFIG_FILE = os.getenv("CONFIG_FILE", "/app/config.json")
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))

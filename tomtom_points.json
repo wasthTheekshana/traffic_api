@@ -1,0 +1,15 @@
+{
+  "_note": "Approximate points on the main road of each Google route corridor. TomTom snaps each point to the nearest road segment; run `python tomtom_collector.py --check` and confirm frc is FRC0-FRC3 (a main road). Move any point that lands on a side road.",
+  "points": [
+    {"id": "Fort_Borella_Maradana",      "lat": 6.9265, "lon": 79.8640, "corridor": "Fort <-> Borella"},
+    {"id": "Borella_Baseline",           "lat": 6.9135, "lon": 79.8775, "corridor": "Borella <-> Nugegoda / Rajagiriya"},
+    {"id": "Nugegoda_HighLevel",         "lat": 6.8725, "lon": 79.8890, "corridor": "Nugegoda <-> Borella"},
+    {"id": "Kirulapone_HighLevel",       "lat": 6.8785, "lon": 79.8775, "corridor": "Nugegoda <-> Borella"},
+    {"id": "Wellawatte_GalleRd",         "lat": 6.8745, "lon": 79.8590, "corridor": "Dehiwala -> Colombo 3"},
+    {"id": "Kollupitiya_GalleRd",        "lat": 6.9115, "lon": 79.8495, "corridor": "Colombo 3 -> Fort"},
+    {"id": "Pettah_Olcott",              "lat": 6.9340, "lon": 79.8500, "corridor": "Pettah <-> Peliyagoda"},
+    {"id": "KelaniBridge_Peliyagoda",    "lat": 6.9560, "lon": 79.8790, "corridor": "Pettah <-> Peliyagoda"},
+    {"id": "Rajagiriya_SriJayawardena",  "lat": 6.9090, "lon": 79.8960, "corridor": "Battaramulla <-> Rajagiriya <-> Borella"},
+    {"id": "Battaramulla_Parliament",    "lat": 6.9010, "lon": 79.9130, "corridor": "Battaramulla -> Rajagiriya"}
+  ]
+}
